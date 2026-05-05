@@ -210,6 +210,35 @@ function buildTheoryChapters(paragraphs) {
   return chapters;
 }
 
+function normalizeBreakdownDetail(detail, fallbackLabel = "Kritérium") {
+  const safePoints = Number.isFinite(detail?.points) ? detail.points : 0;
+  const safeMax = Number.isFinite(detail?.max) && detail.max > 0 ? detail.max : 1;
+  const safePercent = Number.isFinite(detail?.percent)
+    ? detail.percent
+    : Math.round((safePoints / safeMax) * 100);
+
+  return {
+    label: detail?.label || fallbackLabel,
+    points: safePoints,
+    max: safeMax,
+    percent: safePercent,
+    detail: detail?.detail || "",
+  };
+}
+
+function upsertBreakdownDetail(details, nextDetail) {
+  const normalized = normalizeBreakdownDetail(nextDetail, nextDetail?.label || "Kritérium");
+  const existingIndex = details.findIndex((detail) => detail.label === normalized.label);
+
+  if (existingIndex >= 0) {
+    details[existingIndex] = normalized;
+  } else {
+    details.push(normalized);
+  }
+
+  return details;
+}
+
 function parseStructure(text) {
   const paragraphs = splitParagraphs(text);
   const sections = {
@@ -238,24 +267,29 @@ function parseStructure(text) {
   const introLabel = sectionLabels.find((item) => item.section === "intro");
   const theoryLabel = sectionLabels.find((item) => item.section === "theory");
   const practiceLabel = sectionLabels.find((item) => item.section === "practice");
+  const conclusionLabel = sectionLabels.find((item) => item.section === "conclusion");
 
-  if (!theoryLabel && introLabel && practiceLabel && introLabel.index < practiceLabel.index) {
-    const betweenIntroAndPractice = paragraphs.slice(introLabel.index + 1, practiceLabel.index);
+  if (introLabel && practiceLabel && introLabel.index < practiceLabel.index) {
+    const theoryStartIndex = theoryLabel ? theoryLabel.index + 1 : introLabel.index + 1;
+    const betweenIntroAndPractice = paragraphs.slice(theoryStartIndex, practiceLabel.index);
 
     if (betweenIntroAndPractice.length) {
       const firstTheoryHeadingIndex = betweenIntroAndPractice.findIndex((paragraph, index) => {
-        if (index === 0) return false;
+        if (index === 0 && theoryLabel) return false;
         return isHeadingParagraph(paragraph);
       });
 
-      if (firstTheoryHeadingIndex >= 0) {
+      if (!theoryLabel && firstTheoryHeadingIndex >= 0) {
         sections.intro.paragraphs = betweenIntroAndPractice.slice(0, firstTheoryHeadingIndex);
         sections.theory.paragraphs = betweenIntroAndPractice.slice(firstTheoryHeadingIndex);
-      } else if (betweenIntroAndPractice.length >= 2) {
-        sections.intro.paragraphs = [betweenIntroAndPractice[0]];
-        sections.theory.paragraphs = betweenIntroAndPractice.slice(1);
+      } else {
+        sections.theory.paragraphs = betweenIntroAndPractice.slice();
       }
     }
+  }
+
+  if (practiceLabel && conclusionLabel && practiceLabel.index < conclusionLabel.index) {
+    sections.practice.paragraphs = paragraphs.slice(practiceLabel.index + 1, conclusionLabel.index);
   }
 
   sections.theory.chapters = buildTheoryChapters(sections.theory.paragraphs);
@@ -652,13 +686,15 @@ function buildContext(text) {
       sentences: chapterSentences,
       factCount: factSentences.length,
       isEmpty: getWords(textContent).length === 0,
+      isAuxiliaryHeading: getWords(textContent).length === 0 && /[:：]$/.test(chapter.heading.trim()),
     };
   });
 
-  const emptyTheoryChapters = theoryChapters.filter((chapter) => chapter.isEmpty);
+  const substantiveTheoryChapters = theoryChapters.filter((chapter) => !chapter.isAuxiliaryHeading);
+  const emptyTheoryChapters = substantiveTheoryChapters.filter((chapter) => chapter.isEmpty);
   const hasEmptyTheoryChapter = emptyTheoryChapters.length > 0;
 
-  const expertTerms = extractExpertTerms(theoryText, theoryChapters);
+  const expertTerms = extractExpertTerms(theoryText, substantiveTheoryChapters);
 
   return {
     text: normalized,
@@ -694,15 +730,15 @@ function buildContext(text) {
       practiceWordCount: getWords(practiceText).length,
       conclusionWordCount: getWords(conclusionText).length,
       theoryParagraphCount: structure.theory.paragraphs.length,
-    theoryChapterCount: theoryChapters.length,
-    averageTheoryChapterWords: theoryChapters.length ? theoryChapters.reduce((sum, chapter) => sum + chapter.words.length, 0) / theoryChapters.length : 0,
-    theoryFactCount: theoryChapters.reduce((sum, chapter) => sum + chapter.factCount, 0),
-    theoryChapters,
-    emptyTheoryChapters,
-    hasEmptyTheoryChapter,
-    factsEnoughPerChapter: theoryChapters.length >= 2 && theoryChapters.every((chapter) => !chapter.isEmpty && chapter.factCount >= 10),
-    uniqueTheoryTerms: expertTerms,
-    theoryChaptersHaveContent: theoryChapters.length >= 2 && theoryChapters.every((chapter) => !chapter.isEmpty && chapter.words.length >= 80 && chapter.heading.length > 0),
+      theoryChapterCount: substantiveTheoryChapters.length,
+      averageTheoryChapterWords: substantiveTheoryChapters.length ? substantiveTheoryChapters.reduce((sum, chapter) => sum + chapter.words.length, 0) / substantiveTheoryChapters.length : 0,
+      theoryFactCount: substantiveTheoryChapters.reduce((sum, chapter) => sum + chapter.factCount, 0),
+      theoryChapters: substantiveTheoryChapters,
+      emptyTheoryChapters,
+      hasEmptyTheoryChapter,
+      factsEnoughPerChapter: substantiveTheoryChapters.length >= 2 && substantiveTheoryChapters.every((chapter) => !chapter.isEmpty && chapter.factCount >= 10),
+      uniqueTheoryTerms: expertTerms,
+      theoryChaptersHaveContent: substantiveTheoryChapters.length >= 2 && substantiveTheoryChapters.every((chapter) => !chapter.isEmpty && chapter.words.length >= 80 && chapter.heading.length > 0),
     theoryOpinionCount: countMatches(theoryText, /\b(myslím|myslela|myslel|podle mě|domnívám|domnívala|líbí se mi|mám rád|mám ráda|zdá se mi)\b/gi),
     theoryFirstPersonCount: countMatches(theoryText, /\b(já|mně|mě|můj|moje|moji|myslím|zjistil jsem|zjistila jsem|vybral jsem|vybrala jsem)\b/gi),
     theoryPracticeKeywordOverlap: overlapKeywords.length,
@@ -1070,13 +1106,42 @@ function evaluateTheory(context, examplePicker) {
     });
   });
 
+  const requiredTheoryLabels = [
+    "Rozsah teoretické části",
+    "Kapitoly teoretické části",
+    "Množství faktů v teorii",
+    "Odborné termíny",
+    "Pořadí a členění informací",
+    "Odborný styl bez osobního názoru",
+  ];
+
+  const fallbackDetails = {
+    "Rozsah teoretické části": "Teoretická část zatím nemá dost textu k přesnému posouzení rozsahu.",
+    "Kapitoly teoretické části": "Rozpoznání kapitol v teorii se nepodařilo.",
+    "Množství faktů v teorii": `Celkem: ${context.theoryFactCount} faktů.`,
+    "Odborné termíny": "Zatím není dost podkladů pro vyhodnocení odborných termínů.",
+    "Pořadí a členění informací": "Zatím není dost podkladů pro vyhodnocení členění teorie.",
+    "Odborný styl bez osobního názoru": "Zatím není dost podkladů pro vyhodnocení odborného stylu.",
+  };
+
+  const orderedBreakdown = [];
+  requiredTheoryLabels.forEach((label) => {
+    const existing = breakdown.find((detail) => detail.label === label);
+    upsertBreakdownDetail(orderedBreakdown, existing || {
+      label,
+      points: 0,
+      max: label === "Rozsah teoretické části" || label === "Kapitoly teoretické části" || label === "Množství faktů v teorii" ? 15 : 10,
+      detail: fallbackDetails[label],
+    });
+  });
+
   if (context.hasEmptyTheoryChapter) {
     strengths.length = 0;
     rewards.length = 0;
     missing.unshift("V teoretické části je potřeba nejdřív dodělat ostatní kapitoly, aby šlo hodnotit práci jako celek.");
   }
 
-  return { strengths, missing, tips, rewards, breakdown, points, max };
+  return { strengths, missing, tips, rewards, breakdown: orderedBreakdown.map((detail) => normalizeBreakdownDetail(detail, detail.label)), points, max };
 }
 
 function evaluatePanels(context) {
@@ -1252,7 +1317,9 @@ function evaluatePanels(context) {
       points: panels[1].points,
       max: panels[1].max,
       percent: panels[1].percent,
-      details: theory.breakdown,
+      details: theory.breakdown
+        .filter(Boolean)
+        .map((detail) => normalizeBreakdownDetail(detail, detail.label)),
     },
       {
         key: "practice",
@@ -1370,12 +1437,24 @@ function renderBreakdown(items) {
 function renderPanels(panels) {
   sectionPanels.innerHTML = "";
   panels.forEach((panel) => {
+    const strengthsMarkup = panel.strengths.length
+      ? panel.strengths.map((item) => `<li>${item}</li>`).join("")
+      : `<li>Zatím tu ještě čeká první větší úspěch.</li>`;
+    const missingMarkup = panel.missing.length
+      ? `<details class="section-column attention section-collapsible">
+          <summary class="section-collapsible-summary">🧩 Co doplnit <span>${panel.missing.length}</span></summary>
+          <div class="section-collapsible-body">
+            <ul>${panel.missing.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+        </details>`
+      : "";
+
     const card = document.createElement("article");
     card.className = "section-panel";
     card.innerHTML = `
         <div class="section-panel-head">
           <div>
-            <p class="section-panel-label">${panel.icon} ${panel.title}</p>
+            <p class="section-panel-label">LEVEL ${panel.icon} ${panel.title}</p>
             <h3>${panel.percent} % splněno</h3>
           </div>
           <div class="section-mini-badge">${panel.rewards.length}</div>
@@ -1383,13 +1462,10 @@ function renderPanels(panels) {
         <p class="section-sample">${panel.sample}</p>
         <div class="section-columns">
           <div class="section-column success">
-            <h4>Co se povedlo</h4>
-            <ul>${panel.strengths.map((item) => `<li>${item}</li>`).join("")}</ul>
-        </div>
-        <div class="section-column attention">
-          <h4>Co doplnit</h4>
-          <ul>${panel.missing.map((item) => `<li>${item}</li>`).join("")}</ul>
-        </div>
+            <h4>✨ Co se povedlo</h4>
+            <ul>${strengthsMarkup}</ul>
+          </div>
+          ${missingMarkup}
       </div>
       <div class="section-rewards">
         ${panel.rewards.length
