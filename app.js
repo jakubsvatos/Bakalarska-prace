@@ -188,6 +188,28 @@ function detectSectionName(paragraph) {
   return "";
 }
 
+function buildTheoryChapters(paragraphs) {
+  const chapters = [];
+  let currentTheoryChapter = null;
+
+  paragraphs.forEach((paragraph) => {
+    if (isHeadingParagraph(paragraph)) {
+      currentTheoryChapter = { heading: stripHeadingNumber(paragraph), paragraphs: [] };
+      chapters.push(currentTheoryChapter);
+      return;
+    }
+
+    if (!currentTheoryChapter) {
+      currentTheoryChapter = { heading: "Teoretická kapitola", paragraphs: [] };
+      chapters.push(currentTheoryChapter);
+    }
+
+    currentTheoryChapter.paragraphs.push(paragraph);
+  });
+
+  return chapters;
+}
+
 function parseStructure(text) {
   const paragraphs = splitParagraphs(text);
   const sections = {
@@ -197,31 +219,46 @@ function parseStructure(text) {
     conclusion: { paragraphs: [] },
   };
   let currentSection = "";
-  let currentTheoryChapter = null;
+  const sectionLabels = paragraphs.map((paragraph, index) => ({
+    index,
+    section: detectSectionName(paragraph),
+  })).filter((item) => item.section);
 
   paragraphs.forEach((paragraph) => {
     const explicitSection = detectSectionName(paragraph);
     if (explicitSection) {
       currentSection = explicitSection;
-      currentTheoryChapter = null;
       return;
     }
     if (!currentSection) return;
 
     sections[currentSection].paragraphs.push(paragraph);
-    if (currentSection === "theory") {
-      if (isHeadingParagraph(paragraph)) {
-        currentTheoryChapter = { heading: stripHeadingNumber(paragraph), paragraphs: [] };
-        sections.theory.chapters.push(currentTheoryChapter);
-        return;
-      }
-      if (!currentTheoryChapter) {
-        currentTheoryChapter = { heading: "Teoretická kapitola", paragraphs: [] };
-        sections.theory.chapters.push(currentTheoryChapter);
-      }
-      currentTheoryChapter.paragraphs.push(paragraph);
-    }
   });
+
+  const introLabel = sectionLabels.find((item) => item.section === "intro");
+  const theoryLabel = sectionLabels.find((item) => item.section === "theory");
+  const practiceLabel = sectionLabels.find((item) => item.section === "practice");
+
+  if (!theoryLabel && introLabel && practiceLabel && introLabel.index < practiceLabel.index) {
+    const betweenIntroAndPractice = paragraphs.slice(introLabel.index + 1, practiceLabel.index);
+
+    if (betweenIntroAndPractice.length) {
+      const firstTheoryHeadingIndex = betweenIntroAndPractice.findIndex((paragraph, index) => {
+        if (index === 0) return false;
+        return isHeadingParagraph(paragraph);
+      });
+
+      if (firstTheoryHeadingIndex >= 0) {
+        sections.intro.paragraphs = betweenIntroAndPractice.slice(0, firstTheoryHeadingIndex);
+        sections.theory.paragraphs = betweenIntroAndPractice.slice(firstTheoryHeadingIndex);
+      } else if (betweenIntroAndPractice.length >= 2) {
+        sections.intro.paragraphs = [betweenIntroAndPractice[0]];
+        sections.theory.paragraphs = betweenIntroAndPractice.slice(1);
+      }
+    }
+  }
+
+  sections.theory.chapters = buildTheoryChapters(sections.theory.paragraphs);
 
   return sections;
 }
