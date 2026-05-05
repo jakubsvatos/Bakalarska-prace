@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moje bakalářská práce</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Sebehodnocení pro mladé autory</p>
+        <h1>Moje bakalářská práce</h1>
+        <p class="hero-text">
+          Vlož svou školní práci a zjisti, co se ti povedlo, co ještě chybí a jak text vylepšit vlastními slovy.
+        </p>
+      </div>
+      <div class="hero-panel">
+        <div class="hero-stat">
+          <span class="stat-label">Cíl mise</span>
+          <strong>Rozloučit se s prvním stupněm co nejlepší prací, kterou umím.</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="stat-label">Odměny</span>
+          <strong>Hvězdy, odznaky, poháry</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="stat-label">Pravidlo</span>
+          <strong>Aplikace neradí hotové věty</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-grid">
+      <section class="card input-card">
+        <div class="section-title">
+          <h2>Nahraj svůj dokument</h2>
+          <p>Nahraj soubor ve formátu Word `(.docx)` nebo PDF `(.pdf)`. Aplikace z něj přečte text a pak ho vyhodnotí.</p>
+        </div>
+
+        <label class="field-label" for="studentName">Jméno autora</label>
+        <input id="studentName" class="text-input" type="text" placeholder="Např. Tereza">
+
+        <div class="upload-panel">
+          <label class="upload-button" for="documentInput">Vybrat dokument</label>
+          <input id="documentInput" class="hidden-file-input" type="file" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <p id="fileStatus" class="file-status">Zatím není vybraný žádný dokument.</p>
+          <p id="fileMeta" class="file-meta hidden"></p>
+          <div id="uploadAlert" class="upload-alert hidden" role="alert"></div>
+        </div>
+
+        <textarea id="essayText" class="hidden-textarea" aria-hidden="true"></textarea>
+
+        <div class="action-row">
+          <button id="evaluateButton" class="primary-button" type="button">Vyhodnotit moji práci</button>
+          <button id="sampleButton" class="secondary-button" type="button">Načíst ukázkový soubor</button>
+        </div>
+
+        <p class="note">
+          Aplikace tě navede, ale nebude ti dopisovat hotové odstavce. Cílem je pomoci ti zlepšit vlastní text.
+        </p>
+        <p class="note">
+          Pro teorii se teď sleduje i rozsah, kapitoly, množství faktů, odborné termíny, odborný styl a souvislost s praxí.
+        </p>
+      </section>
+
+      <section class="card results-card">
+        <div class="section-title">
+          <h2>Výsledek mise</h2>
+          <p>Po vyhodnocení tu uvidíš pochvalu, co chybí a jak se můžeš posunout dál.</p>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          <div class="empty-illustration">⭐</div>
+          <p id="emptyStateMessage">Sem se zobrazí tvoje hvězdy, odznaky a doporučení.</p>
+        </div>
+
+        <div id="resultsPanel" class="results-panel hidden">
+          <div class="score-banner">
+            <div>
+              <p class="score-label">Celkové hodnocení</p>
+              <h3 id="scoreTitle">Autor na dobré cestě</h3>
+            </div>
+            <div class="score-badge">
+              <span id="scoreValue">0</span>
+              <small>/ 100</small>
+            </div>
+          </div>
+
+          <div class="reward-strip">
+            <div class="reward-box">
+              <span class="reward-icon">⭐</span>
+              <strong id="starCount">0</strong>
+              <small>hvězd</small>
+            </div>
+            <div class="reward-box">
+              <span class="reward-icon">🏅</span>
+              <strong id="badgeCount">0</strong>
+              <small>odznaků</small>
+            </div>
+            <div class="reward-box">
+              <span class="reward-icon">🏆</span>
+              <strong id="trophyCount">0</strong>
+              <small>pohárů</small>
+            </div>
+          </div>
+
+          <section class="panel-section">
+            <div class="progress-header">
+              <h3>Ocenění Po Sekcích</h3>
+              <p>Každá část práce má vlastní panel s pochvalou, nedostatky a odměnami.</p>
+            </div>
+            <div id="sectionPanels" class="section-panels"></div>
+          </section>
+
+          <section class="tips-section">
+            <button id="tipsToggle" class="tips-toggle" type="button" aria-expanded="false">
+              Zobrazit návrhy ke zlepšení
+            </button>
+            <div id="tipsPanel" class="tips-panel hidden">
+              <h3>Jak text vylepšit vlastními slovy</h3>
+              <ul id="tipsList"></ul>
+            </div>
+          </section>
+
+          <section class="breakdown-section">
+            <h3>Přehled podle oblastí</h3>
+            <div id="criteriaList" class="criteria-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
+  <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
